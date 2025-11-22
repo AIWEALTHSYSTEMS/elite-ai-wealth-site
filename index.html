@@ -1,0 +1,328 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Elite AI Wealth Empire — Premium</title>
+  <meta name="description" content="Join the Elite AI Wealth Empire — done-for-you AI business systems, templates, and training.">
+  <style>
+    :root{--bg:#000;--gold:#D4AF37;--muted:#222;--glass:rgba(255,255,255,0.03);--text:#f7f5f2}
+    html,body{height:100%;margin:0;font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,'Helvetica Neue',Arial}
+    body{background:linear-gradient(180deg,#000 0%, #060606 100%);color:var(--text);-webkit-font-smoothing:antialiased}
+    .container{max-width:1100px;margin:36px auto;padding:24px}
+    header{display:flex;align-items:center;justify-content:space-between}
+    .brand{display:flex;align-items:center;gap:12px}
+    .logo{width:56px;height:56px;border-radius:10px;background:linear-gradient(135deg,var(--gold),#b88724);display:flex;align-items:center;justify-content:center;color:#000;font-weight:800}
+    .title{font-size:18px;font-weight:700}
+    nav a{color:var(--gold);margin-left:14px;text-decoration:none}
+    .hero{display:grid;grid-template-columns:1fr 420px;gap:28px;margin-top:28px}
+    .card{background:var(--glass);padding:24px;border-radius:14px;box-shadow:0 6px 18px rgba(0,0,0,0.7);border:1px solid rgba(255,255,255,0.03)}
+    .btn{background:var(--gold);color:#000;padding:10px 14px;border-radius:10px;border:none;cursor:pointer;font-weight:700}
+    .btn.secondary{background:transparent;border:1px solid rgba(255,255,255,0.06);color:var(--text)}
+    .small{color:#ccc;font-size:14px}
+    .cols{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+    footer{margin-top:28px;color:#999;font-size:13px;text-align:center}
+    pre{background:#070707;padding:12px;border-radius:8px;overflow:auto}
+    .config{font-family:monospace;font-size:13px}
+    @media(max-width:980px){.hero{grid-template-columns:1fr}.cols{grid-template-columns:1fr}.container{padding:12px}}
+  </style>
+</head>
+<body>
+
+<!-- PAYPAL QUICK CONFIG PANEL -->
+<div id="pp-config" style="position:fixed;right:14px;bottom:14px;background:rgba(0,0,0,0.7);padding:12px;border-radius:10px;border:1px solid rgba(255,255,255,0.04);z-index:9999;color:#eee;max-width:360px;font-size:14px;">
+  <div style="display:flex;align-items:center;justify-content:space-between;gap:8px">
+    <strong style="color:var(--gold)">PayPal Setup</strong>
+    <button id="pp-config-close" style="background:transparent;border:none;color:#888;cursor:pointer">✕</button>
+  </div>
+  <div style="margin-top:8px;">
+    <label class="small" for="pp-business">Business email</label>
+    <input id="pp-business" placeholder="your-paypal-email@example.com" style="width:100%;padding:8px;margin-top:6px;border-radius:6px;border:1px solid #333;background:#000;color:#fff" />
+    <div style="display:flex;gap:8px;margin-top:10px;">
+      <button id="pp-save" class="btn" style="flex:1;padding:8px;border-radius:8px">Save</button>
+      <button id="pp-test" class="btn secondary" style="flex:1;padding:8px;border-radius:8px">Set to Sandbox</button>
+    </div>
+    <div style="margin-top:8px;font-size:12px;color:#bbb">Saved PayPal email will auto-populate forms.</div>
+  </div>
+</div>
+
+<script>
+(function(){
+  // PayPal config storage
+  var ppKey = 'pp_business_email_v9';
+  var btnClose = document.getElementById('pp-config-close');
+  var panel = document.getElementById('pp-config');
+  btnClose && btnClose.addEventListener('click', function(){ panel.style.display='none' });
+
+  // load saved
+  try{ var saved = localStorage.getItem(ppKey); if(saved) document.getElementById('pp-business').value = saved }catch(e){}
+  document.getElementById('pp-save').addEventListener('click', function(){
+    var v = document.getElementById('pp-business').value.trim();
+    if(!v || v.indexOf('@')===-1){ alert('Enter a valid PayPal business email'); return; }
+    try{ localStorage.setItem(ppKey, v); alert('Saved') }catch(e){ alert('Unable to save in this browser') }
+  });
+  document.getElementById('pp-test').addEventListener('click', function(){
+    // switch PayPal forms to sandbox
+    document.querySelectorAll('form').forEach(function(f){
+      var a = f.getAttribute('action')||'';
+      if(a.indexOf('paypal.com/cgi-bin/webscr')!==-1){
+        f.setAttribute('action', a.replace('www.paypal.com','www.sandbox.paypal.com'));
+      }
+    });
+    alert('Forms switched to PayPal Sandbox (client-side only).');
+  });
+
+  // before submit, populate business and ensure return URLs absolute
+  function makeAbsolute(url){
+    if(!url) return '';
+    if(/^https?:\/\//i.test(url)) return url;
+    var cleaned = url.replace(/^\.\//, '').replace(/^\//, '');
+    var origin = window.location.origin || (window.location.protocol + '//' + window.location.hostname);
+    var basePath = window.location.pathname.replace(/\/[^\/]*$/, '/');
+    if(!basePath.endsWith('/')) basePath = basePath + '/';
+    return origin + basePath + cleaned;
+  }
+
+  document.addEventListener('submit', function(ev){
+    var f = ev.target;
+    if(!(f && f.tagName && f.tagName.toLowerCase()==='form')) return;
+    // populate saved business
+    try{
+      var b = localStorage.getItem(ppKey);
+      if(!b || b.indexOf('@')===-1){ if(f.dataset.requireBusiness) { ev.preventDefault(); alert('Please set PayPal business email in the PayPal Setup panel (bottom-right) before continuing.'); return false; } }
+      var businessInput = f.querySelector('input[name="business"]');
+      if(businessInput && b) businessInput.value = b;
+      // make returns absolute
+      var rt = f.querySelector('input[name="return"]');
+      var cr = f.querySelector('input[name="cancel_return"]');
+      var nn = f.querySelector('input[name="notify_url"]');
+      if(rt && rt.value) rt.value = makeAbsolute(rt.value);
+      if(cr && cr.value) cr.value = makeAbsolute(cr.value);
+      if(nn && nn.value) nn.value = makeAbsolute(nn.value);
+    }catch(e){ console.warn(e) }
+    return true;
+  });
+
+})();
+</script>
+
+<div class="container">
+  <header>
+    <div class="brand">
+      <div class="logo">AI</div>
+      <div>
+        <div class="title">Elite AI Wealth Empire</div>
+        <div class="small">Premium — Done-for-you empire builder</div>
+      </div>
+    </div>
+    <nav>
+      <a href="#home">Home</a>
+      <a href="#sales">Sales</a>
+      <a href="#checkout">Checkout</a>
+      <a href="#dashboard">Member</a>
+      <a href="#affiliate">Affiliate</a>
+    </nav>
+  </header>
+
+  <main class="hero" id="home">
+    <section>
+      <div class="card">
+        <h1>Elite AI Wealth Empire</h1>
+        <p class="small">Launch a done-for-you AI product line and membership. Includes templates, automations, and training.</p>
+        <div style="margin-top:12px" class="cols">
+          <div>
+            <h3>Elite — One-time</h3>
+            <p class="small">$1,997 — Premium complete system</p>
+            <!-- PayPal form -->
+            <form action="https://www.paypal.com/cgi-bin/webscr" method="post" data-requires-business="1" style="margin-top:8px">
+              <input type="hidden" name="cmd" value="_xclick">
+              <input type="hidden" name="business" value="lucindaph@gmail.com">
+              <input type="hidden" name="item_name" value="Elite AI Wealth Empire - Elite One-time">
+              <input type="hidden" name="amount" value="1997.00">
+              <input type="hidden" name="currency_code" value="USD">
+              <input type="hidden" name="return" value="./thank-you.html">
+              <input type="hidden" name="cancel_return" value="./cancel.html">
+              <input type="submit" class="btn" value="Buy Elite $1,997">
+            </form>
+          </div>
+          <div>
+            <h3>Monthly Membership</h3>
+            <p class="small">$97/month — Access + community</p>
+            <form action="https://www.paypal.com/cgi-bin/webscr" method="post" data-requires-business="1" style="margin-top:8px">
+              <input type="hidden" name="cmd" value="_xclick-subscriptions">
+              <input type="hidden" name="business" value="lucindaph@gmail.com">
+              <input type="hidden" name="item_name" value="Elite AI Wealth Empire - Monthly Membership">
+              <input type="hidden" name="a3" value="97.00">
+              <input type="hidden" name="p3" value="1">
+              <input type="hidden" name="t3" value="M">
+              <input type="hidden" name="src" value="1">
+              <input type="hidden" name="currency_code" value="USD">
+              <input type="hidden" name="return" value="./thank-you.html">
+              <input type="hidden" name="cancel_return" value="./cancel.html">
+              <input type="submit" class="btn" value="Subscribe $97/m">
+            </form>
+          </div>
+        </div>
+      </div>
+
+      <div style="margin-top:18px" class="card">
+        <h2>Other Offers</h2>
+        <div class="cols">
+          <div>
+            <h4>Advanced Toolkit</h4>
+            <p class="small">One-time $997</p>
+            <form action="https://www.paypal.com/cgi-bin/webscr" method="post" data-requires-business="1">
+              <input type="hidden" name="cmd" value="_xclick">
+              <input type="hidden" name="business" value="lucindaph@gmail.com">
+              <input type="hidden" name="item_name" value="Elite AI Wealth Empire - Advanced Toolkit One-time">
+              <input type="hidden" name="amount" value="997.00">
+              <input type="hidden" name="currency_code" value="USD">
+              <input type="hidden" name="return" value="./thank-you.html">
+              <input type="hidden" name="cancel_return" value="./cancel.html">
+              <input type="submit" class="btn secondary" value="Buy Advanced $997">
+            </form>
+          </div>
+          <div>
+            <h4>Fast-Start Accelerator</h4>
+            <p class="small">One-time $199</p>
+            <form action="https://www.paypal.com/cgi-bin/webscr" method="post" data-requires-business="1">
+              <input type="hidden" name="cmd" value="_xclick">
+              <input type="hidden" name="business" value="lucindaph@gmail.com">
+              <input type="hidden" name="item_name" value="Elite AI Wealth Empire - Fast-Start Accelerator One-time">
+              <input type="hidden" name="amount" value="199.00">
+              <input type="hidden" name="currency_code" value="USD">
+              <input type="hidden" name="return" value="./thank-you.html">
+              <input type="hidden" name="cancel_return" value="./cancel.html">
+              <input type="submit" class="btn secondary" value="Buy Accelerator $199">
+            </form>
+          </div>
+        </div>
+
+        <div style="margin-top:12px" class="cols">
+          <div>
+            <h4>Mini Toolkit</h4>
+            <p class="small">One-time $97</p>
+            <form action="https://www.paypal.com/cgi-bin/webscr" method="post" data-requires-business="1">
+              <input type="hidden" name="cmd" value="_xclick">
+              <input type="hidden" name="business" value="lucindaph@gmail.com">
+              <input type="hidden" name="item_name" value="Elite AI Wealth Empire - Mini Toolkit One-time">
+              <input type="hidden" name="amount" value="97.00">
+              <input type="hidden" name="currency_code" value="USD">
+              <input type="hidden" name="return" value="./thank-you.html">
+              <input type="hidden" name="cancel_return" value="./cancel.html">
+              <input type="submit" class="btn secondary" value="Buy Mini $97">
+            </form>
+          </div>
+          <div>
+            <h4>Affiliate</h4>
+            <p class="small">Join our affiliate program — 30% commission</p>
+            <button class="btn" id="generateAff">Generate My Affiliate Link</button>
+          </div>
+        </div>
+      </div>
+
+      <section id="checkout" style="margin-top:18px" class="card">
+        <h2>Checkout</h2>
+        <p class="small">Choose your product above — PayPal will handle secure payment.</p>
+      </section>
+
+    </section>
+
+    <aside>
+      <div class="card">
+        <h3>Member Dashboard</h3>
+        <p class="small">Access training, templates, and automations.</p>
+        <div style="margin-top:10px">
+          <button class="btn" id="loginBtn">Sign in</button>
+        </div>
+        <h3 style="margin-top:14px">Subscription / Billing</h3>
+        <div class="small">Status: <span id="subStatus">Not subscribed</span></div>
+        <div style="margin-top:12px"><button class="btn" data-action="manageSub">Manage Subscription</button></div>
+      </div>
+
+      <div style="margin-top:12px" class="card">
+        <h3>Affiliate Center</h3>
+        <p class="small">Auto-generate affiliate links, grab promo assets.</p>
+        <button class="btn secondary" id="downloadKit">Download Promo Kit</button>
+        <pre class="config" id="affConfig">{
+  "commission_percent":30,
+  "cookie_days":30,
+  "payout_threshold":100
+}</pre>
+      </div>
+    </aside>
+  </main>
+
+  <footer>
+    <div class="small">Support: <a href="mailto:support@aiwealth-systems.com" style="color:var(--gold)">support@aiwealth-systems.com</a></div>
+    <div style="margin-top:8px">© Elite AI Wealth Empire</div>
+  </footer>
+</div>
+
+<script>
+// affiliate generator
+document.getElementById('generateAff').addEventListener('click', function(){
+  try {
+    var ref = 'aff_' + Math.random().toString(36).slice(2,8);
+    localStorage.setItem('affiliate_ref', ref);
+    alert('Your affiliate link: ' + window.location.href + '?ref=' + ref);
+  } catch(e){ alert('Unable to generate link') }
+});
+
+// simple UI interactions
+document.getElementById('loginBtn').addEventListener('click', function(){ alert('Member sign-in placeholder (setup separately)') });
+document.getElementById('downloadKit').addEventListener('click', function(){ alert('Promo kit download placeholder — will be added on request') });
+
+(function(){
+  // parse hash for affiliate
+  function parseHashQuery(){ var h = window.location.hash||''; var q = {}; if(h.indexOf('?')===-1) return q; var s = h.split('?')[1]; s.split('&').forEach(function(p){ var kv = p.split('='); q[kv[0]] = kv[1]; }); return q; }
+  window.addEventListener('hashchange', function(){ var q = parseHashQuery(); if(q.ref) localStorage.setItem('affiliate_ref', q.ref); });
+
+  // simple affiliate download stub
+  document.getElementById('downloadKit').addEventListener('click', function(){
+    var a = document.createElement('a'); a.href = 'data:text/plain,Promo kit placeholder'; a.download = 'promo_kit.txt'; a.click();
+  });
+})();
+</script>
+
+<!-- PAYPAL REDIRECT FIX (already injected) -->
+<script>
+// PAYPAL REDIRECT FIX — converts relative return/cancel/notify URLs to absolute before submit
+(function(){
+  function makeAbsolute(url) {
+    if(!url) return '';
+    if(/^https?:\/\//i.test(url)) return url;
+    var cleaned = url.replace(/^\.\//, '').replace(/^\//, '');
+    var origin = window.location.origin || (window.location.protocol + '//' + window.location.hostname);
+    var basePath = window.location.pathname.replace(/\/[^\/]*$/, '/');
+    if (!basePath.endsWith('/')) basePath = basePath + '/';
+    return origin + basePath + cleaned;
+  }
+  function fixForm(f){
+    try{
+      var rt = f.querySelector('input[name=\"return\"]');
+      var cr = f.querySelector('input[name=\"cancel_return\"]');
+      var nn = f.querySelector('input[name=\"notify_url\"]');
+      if(rt && rt.value && !/^https?:\/\//i.test(rt.value)) rt.value = makeAbsolute(rt.value);
+      if(cr && cr.value && !/^https?:\/\//i.test(cr.value)) cr.value = makeAbsolute(cr.value);
+      if(nn && nn.value && !/^https?:\/\//i.test(nn.value)) nn.value = makeAbsolute(nn.value);
+    }catch(e){console.warn('fixForm error',e)}
+  }
+  document.addEventListener('DOMContentLoaded', function(){
+    document.querySelectorAll('form').forEach(function(f){
+      var action = (f.getAttribute('action')||'').toLowerCase();
+      if(action.indexOf('paypal.com/cgi-bin/webscr')!==-1 || f.querySelector('input[name=\"business\"]')) fixForm(f);
+    });
+  });
+  document.addEventListener('submit', function(ev){
+    var f = ev.target;
+    if(f && f.tagName && f.tagName.toLowerCase()==='form'){
+      var action = (f.getAttribute('action')||'').toLowerCase();
+      if(action.indexOf('paypal.com/cgi-bin/webscr')!==-1 || f.querySelector('input[name=\"business\"]')) fixForm(f);
+    }
+  }, true);
+})();
+</script>
+
+</body>
+</html>
